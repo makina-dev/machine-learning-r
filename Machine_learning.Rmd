@@ -1,0 +1,134 @@
+---
+title: "Untitled"
+author: '"'
+date: "7/21/2021"
+output: html_document
+---
+
+                                                 MACHINE LEARNING 
+                                                 
+                                                 
+
+
+How do you frame your main question as a machine learning problem?
+
+
+
+
+The objective of the analysis and model is to make a model to predict the grouping type based on new data given
+
+
+
+
+
+Is it a supervised or unsupervised problem?
+
+
+
+
+Supervised model with a classification problem of identifying 5 classes of groupings
+
+
+
+
+
+What are the main features (also called independent variables or predictors) that you'll use?
+
+
+
+
+"age"          "gender"       "origin"      "day"       "city"         "state"       "jurisdiction" "armed"        "month_int"   
+
+
+Which machine learning technique will you use?
+
+
+
+Random Forest Classifier
+
+
+
+How will you evaluate the success of your machine learning technique? What metric will you use?
+The success of the model is gauged on the basis of splitting into training and test set where the data is trained and tried with the test data to identify the performance and in this case we use a confusion matrix to get the precision, recall and accuracy. 
+
+        
+        
+               importing some libraries we will use and coding
+        
+        
+```{r}
+
+require(tidyverse)
+require(caret)
+require(dplyr)
+require(party)
+require(plyr)
+library(readr)
+clean_data <- read_csv("clean_data.csv")
+View(clean_data)
+```
+
+```{r}
+#
+df <- clean_data %>% 
+  fastDummies::dummy_cols(select_columns = c('gender', 'origin', 'armed')) %>% 
+  dplyr::mutate(city = as.factor(city), 
+                state = as.factor(state), 
+                jurisdiction = as.factor(jurisdiction),
+                grouping = as.factor(grouping)) %>% 
+  mutate_if(is.factor, as.numeric) %>% 
+  mutate(grouping = as.factor(grouping)) %>% 
+  dplyr::select(-c(1,2,4,5,6,8,9,14,16,17)) %>% 
+  mutate_at(c("age", "day", "city", "state", "jurisdiction", "month_int"), ~(scale(.) %>% as.vector)) %>% 
+  plyr::rename(c('grouping' = 'cause_of_death',
+                 'origin' = 'race')) %>% 
+  janitor::clean_names()
+#
+# train test split
+n = nrow(df)
+trainIndex = sample(1:n, size = round(0.7*n), replace=FALSE)
+train = df[trainIndex ,]
+test = df[-trainIndex ,]
+#
+# Random Forest parameter tuning
+library(randomForest)
+set.seed(42)
+rf <-randomForest(cause_of_death~.,data=train, ntree=500) 
+print(rf)
+#
+#number of variables tried at each split is 5
+floor(sqrt(ncol(train) - 1))
+#
+#The number of variables selected at each split is denoted by mtry in randomforest function.
+#Find the optimal mtry value with minimum out of bag(OOB) error.
+mtry <- tuneRF(train[-5], train$cause_of_death, ntreeTry=500,
+               stepFactor=1.5, improve=0.01, trace=TRUE, plot=TRUE)
+best.m <- mtry[mtry[, 2] == min(mtry[, 2]), 1]
+print(mtry)
+print(best.m)
+#
+#In this case, mtry = 4 or 5 is the best mtry as it has least OOB error. mtry = 5 was also used as default mtry.
+# Variable importance
+set.seed(42)
+rf1 <-randomForest(cause_of_death~.,data=train, mtry=best.m, importance=TRUE,ntree=500)
+print(rf1)
+#Evaluate variable importance
+importance(rf1)
+varImpPlot(rf1)
+#
+# 1. Mean Decrease Accuracy - How much the model accuracy decreases if we drop that variable.
+# 2. Mean Decrease Gini - Measure of variable importance based on the Gini impurity index used 
+#    for the calculation of splits in trees.
+#
+# Prediction and Calculate Performance Metrics
+require(e1071)
+pred1=predict(rf1,newdata = test[-5])
+cm <- caret::confusionMatrix(pred1 , test$cause_of_death)
+print(cm)
+```
+
+
+
+
+
+
